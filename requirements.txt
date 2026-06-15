@@ -1,3 +1,4 @@
 python-telegram-bot>=21.0
 yt-dlp
-tiktok-scraper
+selenium
+webdriver-manager
