@@ -1,6 +1,5 @@
 import os
 import re
-import asyncio
 from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
@@ -9,18 +8,28 @@ from TikTokApi import TikTokApi
 
 BOT_TOKEN = "8798378718:AAGRxt_IwUR0m8a2M97l-5TPn8PhWpcNL9s"
 
-# ===== ФУНКЦИЯ ПОИСКА =====
+# ===== ФУНКЦИЯ ПОИСКА С ПРАВИЛЬНОЙ ИНИЦИАЛИЗАЦИЕЙ =====
 async def search_tiktok_by_hashtags(hashtags: list, limit: int = 2):
     primary_tag = hashtags[0].strip('#')
     videos_found = []
     
     async with TikTokApi() as api:
         try:
-            async for video in api.hashtag(name=primary_tag).videos(count=limit):
+            # КЛЮЧЕВОЙ МОМЕНТ: создаём сессию перед запросом
+            await api.create_sessions(
+                num_sessions=1, 
+                headless=True,
+                sleep_after=3
+            )
+            
+            # Получаем видео по хештегу
+            tag = api.hashtag(name=primary_tag)
+            async for video in tag.videos(count=limit):
                 video_url = f"https://www.tiktok.com/@{video.author.username}/video/{video.id}"
                 videos_found.append({"url": video_url})
                 if len(videos_found) >= limit:
                     break
+                    
         except Exception as e:
             print(f"Ошибка поиска: {e}")
     
@@ -46,12 +55,19 @@ async def download_video(url: str) -> str:
 async def start(update: Update, context):
     await update.message.reply_text(
         "👋 Привет! Я ищу видео в TikTok по хештегам.\n\n"
-        "📌 Отправь хештег, например: #коты"
+        "📌 Отправь хештег, например: #коты\n"
+        "🔍 Можно комбинировать: #коты #смешные\n"
+        "📅 Указать период: #коты days=7"
     )
 
 async def handle_message(update: Update, context):
     text = update.message.text.strip()
-    hashtags = re.findall(r'#\w+', text)
+    
+    days_match = re.search(r'days[=\s]+(\d+)', text, re.IGNORECASE)
+    max_days = int(days_match.group(1)) if days_match else 3
+    
+    clean_text = re.sub(r'\s*days[=\s]+\d+', '', text, flags=re.IGNORECASE)
+    hashtags = re.findall(r'#\w+', clean_text)
     
     if not hashtags:
         await update.message.reply_text("❌ Напиши хештег, например: #коты")
@@ -63,7 +79,7 @@ async def handle_message(update: Update, context):
     videos = await search_tiktok_by_hashtags(hashtags, limit=2)
     
     if not videos:
-        await msg.edit_text(f"❌ Не нашёл видео по {tags_str}")
+        await msg.edit_text(f"❌ Не нашёл видео по {tags_str}\nПопробуй другой хештег")
         return
     
     await msg.edit_text(f"📹 Нашёл {len(videos)} видео, скачиваю...")
@@ -86,3 +102,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
