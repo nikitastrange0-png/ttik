@@ -8,11 +8,14 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import yt_dlp
 from curl_cffi import requests as curl_requests
 
-# ===== НАСТРОЙКИ =====
 BOT_TOKEN = "8798378718:AAGRxt_IwUR0m8a2M97l-5TPn8PhWpcNL9s"
 
 flask_app = Flask(__name__)
+
+# Инициализируем приложение
 telegram_app = Application.builder().token(BOT_TOKEN).build()
+# ВАЖНО: инициализируем приложение перед использованием
+telegram_app.initialize()
 
 # ===== ФУНКЦИИ ПОИСКА В TIKTOK =====
 async def get_video_date(video_url: str) -> datetime:
@@ -136,7 +139,6 @@ async def handle_message(update: Update, context):
     
     await update.message.reply_text("✅ Готово!")
 
-# Регистрируем обработчики
 telegram_app.add_handler(CommandHandler("start", start))
 telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
@@ -146,7 +148,8 @@ def webhook():
     try:
         json_data = request.get_json(force=True)
         update = Update.de_json(json_data, telegram_app.bot)
-        asyncio.run(telegram_app.process_update(update))
+        # Запускаем асинхронную обработку в фоне
+        asyncio.create_task(telegram_app.process_update(update))
         return 'ok', 200
     except Exception as e:
         print(f"Ошибка: {e}")
@@ -158,9 +161,6 @@ def health():
 
 # ===== ЗАПУСК =====
 if __name__ == '__main__':
-    print("🚀 Бот запущен!")
-    print("⚠️ Вебхук нужно установить вручную одной командой:")
-    print(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook?url=https://твой-домен.up.railway.app/webhook/{BOT_TOKEN}")
-    
     port = int(os.environ.get('PORT', 8080))
+    print(f"🚀 Бот запущен на порту {port}")
     flask_app.run(host='0.0.0.0', port=port)
