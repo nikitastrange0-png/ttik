@@ -5,12 +5,11 @@ from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import yt_dlp
-from curl_cffi import requests as curl_requests
 from TikTokApi import TikTokApi
 
 BOT_TOKEN = "8798378718:AAGRxt_IwUR0m8a2M97l-5TPn8PhWpcNL9s"
 
-# ===== НОВАЯ ФУНКЦИЯ ПОИСКА =====
+# ===== ФУНКЦИЯ ПОИСКА =====
 async def search_tiktok_by_hashtags(hashtags: list, limit: int = 2):
     primary_tag = hashtags[0].strip('#')
     videos_found = []
@@ -47,31 +46,24 @@ async def download_video(url: str) -> str:
 async def start(update: Update, context):
     await update.message.reply_text(
         "👋 Привет! Я ищу видео в TikTok по хештегам.\n\n"
-        "📌 Отправь хештег, например: #коты\n"
-        "🔍 Можно комбинировать: #коты #смешные\n"
-        "📅 Указать период: #коты days=7"
+        "📌 Отправь хештег, например: #коты"
     )
 
 async def handle_message(update: Update, context):
     text = update.message.text.strip()
-    
-    days_match = re.search(r'days[=\s]+(\d+)', text, re.IGNORECASE)
-    max_days = int(days_match.group(1)) if days_match else 3
-    
-    clean_text = re.sub(r'\s*days[=\s]+\d+', '', text, flags=re.IGNORECASE)
-    hashtags = re.findall(r'#\w+', clean_text)
+    hashtags = re.findall(r'#\w+', text)
     
     if not hashtags:
         await update.message.reply_text("❌ Напиши хештег, например: #коты")
         return
     
     tags_str = ' '.join(hashtags)
-    msg = await update.message.reply_text(f"🔍 Ищу видео по {tags_str} (до {max_days} дней)...")
+    msg = await update.message.reply_text(f"🔍 Ищу видео по {tags_str}...")
     
-    videos = await search_tiktok_by_hashtags(hashtags, limit=2, max_days_old=max_days)
+    videos = await search_tiktok_by_hashtags(hashtags, limit=2)
     
     if not videos:
-        await msg.edit_text(f"❌ Не нашёл свежих видео по {tags_str}")
+        await msg.edit_text(f"❌ Не нашёл видео по {tags_str}")
         return
     
     await msg.edit_text(f"📹 Нашёл {len(videos)} видео, скачиваю...")
@@ -89,7 +81,7 @@ def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("🤖 Бот запущен в режиме polling!")
+    print("🤖 Бот запущен!")
     app.run_polling()
 
 if __name__ == "__main__":
