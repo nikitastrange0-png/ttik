@@ -9,11 +9,8 @@ import yt_dlp
 from curl_cffi import requests as curl_requests
 
 # ===== НАСТРОЙКИ =====
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
+BOT_TOKEN = "8798378718:AAGRxt_IwUR0m8a2M97l-5TPn8PhWpcNL9s"
 RAILWAY_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
-
-if not BOT_TOKEN:
-    raise Exception("BOT_TOKEN не задан в переменных Railway!")
 
 flask_app = Flask(__name__)
 telegram_app = Application.builder().token(BOT_TOKEN).build()
@@ -162,7 +159,6 @@ def health():
 
 # ===== ЗАПУСК =====
 if __name__ == '__main__':
-    # Устанавливаем вебхук
     if RAILWAY_DOMAIN:
         webhook_url = f"https://{RAILWAY_DOMAIN}/webhook/{BOT_TOKEN}"
         asyncio.run(telegram_app.bot.set_webhook(url=webhook_url))
