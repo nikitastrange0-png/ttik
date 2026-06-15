@@ -1,6 +1,5 @@
 import os
 import re
-from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import yt_dlp
@@ -8,15 +7,13 @@ from tiktok_scraper import TikTokScraper
 
 BOT_TOKEN = "8798378718:AAGRxt_IwUR0m8a2M97l-5TPn8PhWpcNL9s"
 
-
-
+# ===== ФУНКЦИЯ ПОИСКА =====
 async def search_tiktok_by_hashtags(hashtags: list, limit: int = 2):
     primary_tag = hashtags[0].strip('#')
     videos_found = []
     
     scraper = TikTokScraper()
     try:
-        # Используем встроенный метод поиска по хештегу
         result = scraper.hashtag(hashtag=primary_tag, count=limit)
         
         if result and 'videos' in result:
@@ -68,12 +65,12 @@ async def handle_message(update: Update, context):
         return
     
     tags_str = ' '.join(hashtags)
-    msg = await update.message.reply_text(f"🔍 Ищу видео по {tags_str}...")
+    msg = await update.message.reply_text(f"🔍 Ищу видео по {tags_str} (до {max_days} дней)...")
     
     videos = await search_tiktok_by_hashtags(hashtags, limit=2)
     
     if not videos:
-        await msg.edit_text(f"❌ Не нашёл видео по {tags_str}\nПопробуй другой хештег")
+        await msg.edit_text(f"❌ Не нашёл свежих видео по {tags_str}")
         return
     
     await msg.edit_text(f"📹 Нашёл {len(videos)} видео, скачиваю...")
@@ -96,4 +93,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
