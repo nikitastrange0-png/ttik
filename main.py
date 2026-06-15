@@ -1,28 +1,73 @@
 import os
 import re
+import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import yt_dlp
-from tiktok_scraper import TikTokScraper
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 BOT_TOKEN = "8798378718:AAGRxt_IwUR0m8a2M97l-5TPn8PhWpcNL9s"
 
-# ===== ФУНКЦИЯ ПОИСКА =====
+# Настройки для Chrome (безголовый режим)
+def get_driver():
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new")  # Без графического интерфейса
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+    driver = webdriver.Chrome(options=chrome_options)
+    return driver
+
+# ===== ФУНКЦИЯ ПОИСКА ЧЕРЕЗ SELENIUM =====
 async def search_tiktok_by_hashtags(hashtags: list, limit: int = 2):
     primary_tag = hashtags[0].strip('#')
     videos_found = []
     
-    scraper = TikTokScraper()
+    driver = None
     try:
-        result = scraper.hashtag(hashtag=primary_tag, count=limit)
+        driver = get_driver()
+        url = f"https://www.tiktok.com/tag/{primary_tag}"
+        driver.get(url)
         
-        if result and 'videos' in result:
-            for video in result['videos'][:limit]:
-                video_url = f"https://www.tiktok.com/@{video['author']['uniqueId']}/video/{video['id']}"
-                videos_found.append({"url": video_url})
-                
+        # Ждём загрузки видео
+        time.sleep(5)
+        
+        # Ищем ссылки на видео
+        video_elements = driver.find_elements(By.CSS_SELECTOR, "a[href*='/video/']")
+        
+        for elem in video_elements[:limit]:
+            href = elem.get_attribute('href')
+            if href and 'video' in href:
+                videos_found.append({"url": href})
+                if len(videos_found) >= limit:
+                    break
+                    
     except Exception as e:
-        print(f"Ошибка поиска: {e}")
+        print(f"Ошибка поиска через Selenium: {e}")
+    finally:
+        if driver:
+            driver.quit()
+    
+    # Если Selenium не нашёл — пробуем запасной вариант через requests
+    if not videos_found:
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+            headers = {"User-Agent": "Mozilla/5.0"}
+            response = requests.get(f"https://www.tiktok.com/tag/{primary_tag}", headers=headers, timeout=15)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            raw_urls = re.findall(r'https://www\.tiktok\.com/@[\w\.]+/video/\d+', str(soup))
+            raw_urls = list(dict.fromkeys(raw_urls))[:limit]
+            for url in raw_urls:
+                videos_found.append({"url": url})
+        except Exception as e2:
+            print(f"Ошибка fallback поиска: {e2}")
     
     return videos_found
 
@@ -46,31 +91,24 @@ async def download_video(url: str) -> str:
 async def start(update: Update, context):
     await update.message.reply_text(
         "👋 Привет! Я ищу видео в TikTok по хештегам.\n\n"
-        "📌 Отправь хештег, например: #коты\n"
-        "🔍 Можно комбинировать: #коты #смешные\n"
-        "📅 Указать период: #коты days=7"
+        "📌 Отправь хештег, например: #коты"
     )
 
 async def handle_message(update: Update, context):
     text = update.message.text.strip()
-    
-    days_match = re.search(r'days[=\s]+(\d+)', text, re.IGNORECASE)
-    max_days = int(days_match.group(1)) if days_match else 3
-    
-    clean_text = re.sub(r'\s*days[=\s]+\d+', '', text, flags=re.IGNORECASE)
-    hashtags = re.findall(r'#\w+', clean_text)
+    hashtags = re.findall(r'#\w+', text)
     
     if not hashtags:
         await update.message.reply_text("❌ Напиши хештег, например: #коты")
         return
     
     tags_str = ' '.join(hashtags)
-    msg = await update.message.reply_text(f"🔍 Ищу видео по {tags_str} (до {max_days} дней)...")
+    msg = await update.message.reply_text(f"🔍 Ищу видео по {tags_str}...")
     
     videos = await search_tiktok_by_hashtags(hashtags, limit=2)
     
     if not videos:
-        await msg.edit_text(f"❌ Не нашёл свежих видео по {tags_str}")
+        await msg.edit_text(f"❌ Не нашёл видео по {tags_str}\nПопробуй другой хештег")
         return
     
     await msg.edit_text(f"📹 Нашёл {len(videos)} видео, скачиваю...")
