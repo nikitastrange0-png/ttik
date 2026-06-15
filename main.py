@@ -138,13 +138,19 @@ async def handle_message(update: Update, context):
 telegram_app.add_handler(CommandHandler("start", start))
 telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-# ===== WEBHOOK =====
+# ===== WEBHOOK С НОВЫМ EVENT LOOP =====
 @flask_app.route(f'/webhook/{BOT_TOKEN}', methods=['POST'])
 def webhook():
     try:
         json_data = request.get_json(force=True)
         update = Update.de_json(json_data, telegram_app.bot)
-        asyncio.create_task(telegram_app.process_update(update))
+        
+        # Создаём новый event loop для этого запроса
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(telegram_app.process_update(update))
+        loop.close()
+        
         return 'ok', 200
     except Exception as e:
         print(f"Ошибка: {e}")
@@ -158,14 +164,17 @@ def health():
 async def setup():
     """Инициализация приложения и установка вебхука"""
     await telegram_app.initialize()
-    webhook_url = f"https://{os.environ.get('RAILWAY_PUBLIC_DOMAIN')}/webhook/{BOT_TOKEN}"
-    await telegram_app.bot.set_webhook(url=webhook_url)
-    print(f"✅ Вебхук установлен: {webhook_url}")
+    railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+    if railway_domain:
+        webhook_url = f"https://{railway_domain}/webhook/{BOT_TOKEN}"
+        await telegram_app.bot.set_webhook(url=webhook_url)
+        print(f"✅ Вебхук установлен: {webhook_url}")
+    else:
+        print("⚠️ RAILWAY_PUBLIC_DOMAIN не задан")
 
 if __name__ == '__main__':
     # Запускаем асинхронную инициализацию
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(setup())
+    asyncio.run(setup())
     
     port = int(os.environ.get('PORT', 8080))
     print(f"🚀 Бот запущен на порту {port}")
