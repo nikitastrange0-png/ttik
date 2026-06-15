@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["chromium", "chromedriver"]
+
+[phases.install]
+cmds = ["playwright install --with-deps chromium"]
+
+[phases.start]
+cmd = "python main.py"
