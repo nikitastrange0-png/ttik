@@ -6,72 +6,26 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import yt_dlp
 from curl_cffi import requests as curl_requests
+from TikTokApi import TikTokApi
 
 BOT_TOKEN = "8798378718:AAGRxt_IwUR0m8a2M97l-5TPn8PhWpcNL9s"
 
-# ===== ФУНКЦИИ ПОИСКА =====
-async def get_video_date(video_url: str) -> datetime:
-    try:
-        response = curl_requests.get(video_url, impersonate="chrome", timeout=10)
-        match = re.search(r'"createTime":\s*"(\d{4}-\d{2}-\d{2})"', response.text)
-        if match:
-            return datetime.strptime(match.group(1), '%Y-%m-%d')
-        return datetime.now() - timedelta(days=999)
-    except Exception:
-        return datetime.now() - timedelta(days=999)
-
-async def is_video_fresh(video_url: str, max_days_old: int = 3) -> bool:
-    video_date = await get_video_date(video_url)
-    return (datetime.now() - video_date).days <= max_days_old
-
-async def check_video_hashtags(video_url: str, required_tags: list) -> bool:
-    try:
-        response = curl_requests.get(video_url, impersonate="chrome", timeout=10)
-        found_tags = re.findall(r'#([\wа-яё]+)', response.text, re.IGNORECASE)
-        found_tags = [tag.lower() for tag in found_tags]
-        return all(tag.lower() in found_tags for tag in required_tags)
-    except Exception:
-        return False
-
-async def search_tiktok_by_hashtags(hashtags: list, limit: int = 2, max_days_old: int = 3):
+# ===== НОВАЯ ФУНКЦИЯ ПОИСКА =====
+async def search_tiktok_by_hashtags(hashtags: list, limit: int = 2):
     primary_tag = hashtags[0].strip('#')
-    other_tags = [tag.strip('#') for tag in hashtags[1:]]
-    
     videos_found = []
-    checked_urls = set()
-    page = 0
     
-    while len(videos_found) < limit and page < 6:
+    async with TikTokApi() as api:
         try:
-            url = f"https://www.tiktok.com/tag/{primary_tag}"
-            if page > 0:
-                url += f"?page={page}"
-            
-            response = curl_requests.get(url, impersonate="chrome", timeout=15)
-            raw_urls = re.findall(r'https://www\.tiktok\.com/@[\w\.]+/video/\d+', response.text)
-            raw_urls = list(dict.fromkeys(raw_urls))
-            
-            for video_url in raw_urls:
+            async for video in api.hashtag(name=primary_tag).videos(count=limit):
+                video_url = f"https://www.tiktok.com/@{video.author.username}/video/{video.id}"
+                videos_found.append({"url": video_url})
                 if len(videos_found) >= limit:
                     break
-                if video_url in checked_urls:
-                    continue
-                checked_urls.add(video_url)
-                
-                if not await is_video_fresh(video_url, max_days_old):
-                    continue
-                
-                if other_tags and not await check_video_hashtags(video_url, other_tags):
-                    continue
-                
-                videos_found.append({"url": video_url})
-            
-            page += 1
         except Exception as e:
             print(f"Ошибка поиска: {e}")
-            break
     
-    return videos_found[:limit]
+    return videos_found
 
 async def download_video(url: str) -> str:
     output_path = "temp_video.mp4"
