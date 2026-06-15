@@ -11,11 +11,7 @@ from curl_cffi import requests as curl_requests
 BOT_TOKEN = "8798378718:AAGRxt_IwUR0m8a2M97l-5TPn8PhWpcNL9s"
 
 flask_app = Flask(__name__)
-
-# Инициализируем приложение
 telegram_app = Application.builder().token(BOT_TOKEN).build()
-# ВАЖНО: инициализируем приложение перед использованием
-telegram_app.initialize()
 
 # ===== ФУНКЦИИ ПОИСКА В TIKTOK =====
 async def get_video_date(video_url: str) -> datetime:
@@ -148,7 +144,6 @@ def webhook():
     try:
         json_data = request.get_json(force=True)
         update = Update.de_json(json_data, telegram_app.bot)
-        # Запускаем асинхронную обработку в фоне
         asyncio.create_task(telegram_app.process_update(update))
         return 'ok', 200
     except Exception as e:
@@ -160,7 +155,18 @@ def health():
     return 'ok', 200
 
 # ===== ЗАПУСК =====
+async def setup():
+    """Инициализация приложения и установка вебхука"""
+    await telegram_app.initialize()
+    webhook_url = f"https://{os.environ.get('RAILWAY_PUBLIC_DOMAIN')}/webhook/{BOT_TOKEN}"
+    await telegram_app.bot.set_webhook(url=webhook_url)
+    print(f"✅ Вебхук установлен: {webhook_url}")
+
 if __name__ == '__main__':
+    # Запускаем асинхронную инициализацию
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(setup())
+    
     port = int(os.environ.get('PORT', 8080))
     print(f"🚀 Бот запущен на порту {port}")
     flask_app.run(host='0.0.0.0', port=port)
