@@ -4,34 +4,28 @@ from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import yt_dlp
-from TikTokApi import TikTokApi
+from tiktok_scraper import TikTokScraper
 
 BOT_TOKEN = "8798378718:AAGRxt_IwUR0m8a2M97l-5TPn8PhWpcNL9s"
 
-# ===== ФУНКЦИЯ ПОИСКА С ПРАВИЛЬНОЙ ИНИЦИАЛИЗАЦИЕЙ =====
+
+
 async def search_tiktok_by_hashtags(hashtags: list, limit: int = 2):
     primary_tag = hashtags[0].strip('#')
     videos_found = []
     
-    async with TikTokApi() as api:
-        try:
-            # КЛЮЧЕВОЙ МОМЕНТ: создаём сессию перед запросом
-            await api.create_sessions(
-                num_sessions=1, 
-                headless=True,
-                sleep_after=3
-            )
-            
-            # Получаем видео по хештегу
-            tag = api.hashtag(name=primary_tag)
-            async for video in tag.videos(count=limit):
-                video_url = f"https://www.tiktok.com/@{video.author.username}/video/{video.id}"
+    scraper = TikTokScraper()
+    try:
+        # Используем встроенный метод поиска по хештегу
+        result = scraper.hashtag(hashtag=primary_tag, count=limit)
+        
+        if result and 'videos' in result:
+            for video in result['videos'][:limit]:
+                video_url = f"https://www.tiktok.com/@{video['author']['uniqueId']}/video/{video['id']}"
                 videos_found.append({"url": video_url})
-                if len(videos_found) >= limit:
-                    break
-                    
-        except Exception as e:
-            print(f"Ошибка поиска: {e}")
+                
+    except Exception as e:
+        print(f"Ошибка поиска: {e}")
     
     return videos_found
 
