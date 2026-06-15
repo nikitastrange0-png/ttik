@@ -10,7 +10,6 @@ from curl_cffi import requests as curl_requests
 
 # ===== НАСТРОЙКИ =====
 BOT_TOKEN = "8798378718:AAGRxt_IwUR0m8a2M97l-5TPn8PhWpcNL9s"
-RAILWAY_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
 
 flask_app = Flask(__name__)
 telegram_app = Application.builder().token(BOT_TOKEN).build()
@@ -159,12 +158,9 @@ def health():
 
 # ===== ЗАПУСК =====
 if __name__ == '__main__':
-    if RAILWAY_DOMAIN:
-        webhook_url = f"https://{RAILWAY_DOMAIN}/webhook/{BOT_TOKEN}"
-        asyncio.run(telegram_app.bot.set_webhook(url=webhook_url))
-        print(f"✅ Вебхук: {webhook_url}")
-    else:
-        print("⚠️ RAILWAY_PUBLIC_DOMAIN не задан")
+    print("🚀 Бот запущен!")
+    print("⚠️ Вебхук нужно установить вручную одной командой:")
+    print(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook?url=https://твой-домен.up.railway.app/webhook/{BOT_TOKEN}")
     
     port = int(os.environ.get('PORT', 8080))
     flask_app.run(host='0.0.0.0', port=port)
