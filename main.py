@@ -2,7 +2,6 @@ import os
 import re
 import asyncio
 from datetime import datetime, timedelta
-from flask import Flask, request
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import yt_dlp
@@ -10,10 +9,7 @@ from curl_cffi import requests as curl_requests
 
 BOT_TOKEN = "8798378718:AAGRxt_IwUR0m8a2M97l-5TPn8PhWpcNL9s"
 
-flask_app = Flask(__name__)
-telegram_app = Application.builder().token(BOT_TOKEN).build()
-
-# ===== ФУНКЦИИ ПОИСКА В TIKTOK =====
+# ===== ФУНКЦИИ ПОИСКА =====
 async def get_video_date(video_url: str) -> datetime:
     try:
         response = curl_requests.get(video_url, impersonate="chrome", timeout=10)
@@ -135,47 +131,12 @@ async def handle_message(update: Update, context):
     
     await update.message.reply_text("✅ Готово!")
 
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    print("🤖 Бот запущен в режиме polling!")
+    app.run_polling()
 
-# ===== WEBHOOK С НОВЫМ EVENT LOOP =====
-@flask_app.route(f'/webhook/{BOT_TOKEN}', methods=['POST'])
-def webhook():
-    try:
-        json_data = request.get_json(force=True)
-        update = Update.de_json(json_data, telegram_app.bot)
-        
-        # Создаём новый event loop для этого запроса
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(telegram_app.process_update(update))
-        loop.close()
-        
-        return 'ok', 200
-    except Exception as e:
-        print(f"Ошибка: {e}")
-        return 'error', 500
-
-@flask_app.route('/')
-def health():
-    return 'ok', 200
-
-# ===== ЗАПУСК =====
-async def setup():
-    """Инициализация приложения и установка вебхука"""
-    await telegram_app.initialize()
-    railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
-    if railway_domain:
-        webhook_url = f"https://{railway_domain}/webhook/{BOT_TOKEN}"
-        await telegram_app.bot.set_webhook(url=webhook_url)
-        print(f"✅ Вебхук установлен: {webhook_url}")
-    else:
-        print("⚠️ RAILWAY_PUBLIC_DOMAIN не задан")
-
-if __name__ == '__main__':
-    # Запускаем асинхронную инициализацию
-    asyncio.run(setup())
-    
-    port = int(os.environ.get('PORT', 8080))
-    print(f"🚀 Бот запущен на порту {port}")
-    flask_app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    main()
